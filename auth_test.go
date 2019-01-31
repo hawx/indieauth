@@ -187,6 +187,41 @@ func TestRedirectWithBadRedirectURIWhitelistedByTag(t *testing.T) {
 	assert.Equal(expectedRedirect, resp.Header.Get("Location"))
 }
 
+func TestRedirectForToken(t *testing.T) {
+	assert := assert.New(t)
+
+	authEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer authEndpoint.Close()
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/somepath", nil)
+
+	err := RedirectForToken(w, r, Session{
+		Me:          urlParse("https://me.example.com"),
+		ClientID:    urlParse("https://webapp.example.com/"),
+		RedirectURI: urlParse("https://webapp.example.com/callback"),
+		State:       "1234",
+		Endpoints: Endpoints{
+			Authorization: urlParse(authEndpoint.URL),
+		},
+	}, []string{"create", "update", "delete"})
+
+	assert.Nil(err)
+
+	resp := w.Result()
+	assert.Equal(http.StatusFound, resp.StatusCode)
+
+	expectedRedirect := authEndpoint.URL +
+		"?client_id=https%3A%2F%2Fwebapp.example.com%2F" +
+		"&me=https%3A%2F%2Fme.example.com" +
+		"&redirect_uri=https%3A%2F%2Fwebapp.example.com%2Fcallback" +
+		"&response_type=code" +
+		"&scope=create+update+delete" +
+		"&state=1234"
+
+	assert.Equal(expectedRedirect, resp.Header.Get("Location"))
+}
+
 func TestVerify(t *testing.T) {
 	assert := assert.New(t)
 
@@ -216,4 +251,48 @@ func TestVerify(t *testing.T) {
 
 	assert.Nil(err)
 	assert.Equal("http://john.doe", me)
+}
+
+func TestRedeemToken(t *testing.T) {
+	assert := assert.New(t)
+
+	authEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" ||
+			r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" ||
+			r.FormValue("grant_type") != "authorization_code" ||
+			r.FormValue("code") != "abcde" ||
+			r.FormValue("client_id") != "http://localhost" ||
+			r.FormValue("redirect_uri") != "http://localhost/callback" ||
+			r.FormValue("me") != "http://me.localhost" {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+  "access_token": "tokentoken",
+  "token_type": "Bearer",
+  "scope": "create update delete",
+  "me": "https://user.example.net/"
+}`))
+	}))
+	defer authEndpoint.Close()
+
+	token, err := RedeemToken("abcde", Session{
+		Me:          urlParse("http://me.localhost"),
+		ClientID:    urlParse("http://localhost"),
+		RedirectURI: urlParse("http://localhost/callback"),
+		State:       "1234",
+		Endpoints: Endpoints{
+			Authorization: urlParse(authEndpoint.URL),
+		},
+	})
+
+	assert.Nil(err)
+	assert.Equal("tokentoken", token.AccessToken)
+	assert.Equal("Bearer", token.TokenType)
+	assert.Len(token.Scopes, 3)
+	assert.True(token.HasScope("create"))
+	assert.True(token.HasScope("update"))
+	assert.True(token.HasScope("delete"))
+	assert.Equal("https://user.example.net/", token.Me)
 }
