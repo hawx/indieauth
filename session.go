@@ -9,20 +9,12 @@ import (
 	"golang.org/x/net/html"
 )
 
-type Session struct {
-	Me          *url.URL
-	ClientID    *url.URL
-	RedirectURI *url.URL
-	State       string
-	Endpoints   Endpoints
-}
-
-func (sess Session) Verify() bool {
-	if sess.ClientID.Scheme == sess.RedirectURI.Scheme && sess.ClientID.Host == sess.RedirectURI.Host {
+func verifySession(me, clientID, redirectURI *url.URL) bool {
+	if clientID.Scheme == redirectURI.Scheme && clientID.Host == redirectURI.Host {
 		return true
 	}
 
-	clientResp, err := http.Get(sess.ClientID.String())
+	clientResp, err := http.Get(clientID.String())
 	if err != nil {
 		return false
 	}
@@ -57,9 +49,9 @@ func (sess Session) Verify() bool {
 		}
 	}
 
-	redirectURI := sess.RedirectURI.String()
+	redirect := redirectURI.String()
 	for _, candidate := range whitelist {
-		if candidate == redirectURI {
+		if candidate == redirect {
 			return true
 		}
 	}

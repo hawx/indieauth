@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	sessions := map[string]indieauth.Session{}
+	sessions := map[string]indieauth.AuthenticationSession{}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`
@@ -40,7 +40,7 @@ func main() {
 			return
 		}
 
-		sess := indieauth.Session{
+		sess := indieauth.AuthenticationSession{
 			Me:          meURL,
 			ClientID:    urlParse("http://localhost:8080/"),
 			RedirectURI: urlParse("http://localhost:8080/callback"),
@@ -49,7 +49,7 @@ func main() {
 		}
 		sessions["1234"] = sess
 
-		err = indieauth.Redirect(w, r, sess)
+		err = sess.Redirect(w, r)
 
 		if err != nil {
 			log.Println(err)
@@ -66,7 +66,7 @@ func main() {
 			return
 		}
 
-		me, err := indieauth.Verify(r.FormValue("code"), sess)
+		me, err := sess.Verify(r.FormValue("code"))
 		if err != nil {
 			log.Println(err)
 			http.Redirect(w, r, "/", http.StatusFound)
