@@ -14,8 +14,8 @@ type Endpoints struct {
 	Token         *url.URL
 }
 
-func FindEndpoints(me *url.URL) (ends Endpoints, err error) {
-	resp, err := http.Get(me.String())
+func FindEndpoints(me string) (ends Endpoints, err error) {
+	resp, err := http.DefaultClient.Get(me)
 	if err != nil {
 		return
 	}

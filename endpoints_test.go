@@ -3,7 +3,6 @@ package indieauth
 import (
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 
 	"hawx.me/code/assert"
@@ -22,8 +21,7 @@ func TestFindEndpoints(t *testing.T) {
 	}))
 	defer homepage.Close()
 
-	homepageURL, _ := url.Parse(homepage.URL)
-	endpoints, err := FindEndpoints(homepageURL)
+	endpoints, err := FindEndpoints(homepage.URL)
 
 	assert.Nil(t, err)
 	assert.Equal(t, "http://example.com/hey", endpoints.Authorization.String())

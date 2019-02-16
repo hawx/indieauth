@@ -28,50 +28,66 @@ func (t Token) HasScope(scope string) bool {
 	return false
 }
 
-type AuthorizationSession struct {
-	Me          *url.URL
+// AuthorizationConfig defines configuration for a client making requests to
+// authorize a user to perform a set of defined actions.
+type AuthorizationConfig struct {
 	ClientID    *url.URL
 	RedirectURI *url.URL
 	Scopes      []string
-	State       string
-	Endpoints   Endpoints
+	Client      *http.Client
 }
 
-func (sess AuthorizationSession) Redirect(w http.ResponseWriter, r *http.Request) error {
-	if r.Method != "GET" {
-		return errors.New("can only redirect from GET requests")
+func Authorization(clientID, redirectURI string, scopes []string) (*AuthorizationConfig, error) {
+	clientURL, err := url.Parse(clientID)
+	if err != nil {
+		return nil, err
+	}
+	redirectURL, err := url.Parse(redirectURI)
+	if err != nil {
+		return nil, err
 	}
 
-	if !verifySession(sess.Me, sess.ClientID, sess.RedirectURI) {
-		http.Error(w, "client_id and redirect_uri are suspicious", http.StatusBadRequest)
-		return errors.New("ClientID and RedirectURI are suspicios")
-	}
+	return &AuthorizationConfig{
+		ClientID:    clientURL,
+		RedirectURI: redirectURL,
+		Scopes:      scopes,
+		Client:      http.DefaultClient,
+	}, nil
+}
 
+// RedirectURL returns a URL to the authorization provider for the profile URL,
+// or "me", given.
+func (c *AuthorizationConfig) RedirectURL(endpoints Endpoints, me, state string) string {
 	queryURL := &url.URL{
 		RawQuery: url.Values{
-			"me":            {sess.Me.String()},
-			"client_id":     {sess.ClientID.String()},
-			"redirect_uri":  {sess.RedirectURI.String()},
-			"state":         {sess.State},
+			"me":            {me},
+			"client_id":     {c.ClientID.String()},
+			"redirect_uri":  {c.RedirectURI.String()},
+			"state":         {state},
 			"response_type": {"code"},
-			"scope":         {strings.Join(sess.Scopes, " ")},
+			"scope":         {strings.Join(c.Scopes, " ")},
 		}.Encode(),
 	}
 
-	redirectURI := sess.Endpoints.Authorization.ResolveReference(queryURL)
-
-	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
-
-	return nil
+	redirectURI := endpoints.Authorization.ResolveReference(queryURL)
+	return redirectURI.String()
 }
 
-func (sess AuthorizationSession) Verify(code string) (token Token, err error) {
-	req, err := http.NewRequest("POST", sess.Endpoints.Authorization.String(), strings.NewReader(url.Values{
+// Exchange converts an authorization code into a token. The code will usually
+// be in r.FormValue("code"), but before calling this method be sure to check
+// the value of r.FormValue("state") is as expected.
+func (c *AuthorizationConfig) Exchange(endpoints Endpoints, code, me string) (token Token, err error) {
+	client := http.DefaultClient
+	if c.Client != nil {
+		client = c.Client
+	}
+
+	req, err := http.NewRequest("POST", endpoints.Authorization.String(), strings.NewReader(url.Values{
 		"grant_type":   {"authorization_code"},
 		"code":         {code},
-		"client_id":    {sess.ClientID.String()},
-		"redirect_uri": {sess.RedirectURI.String()},
-		"me":           {sess.Me.String()},
+		"client_id":    {c.ClientID.String()},
+		"redirect_uri": {c.RedirectURI.String()},
+		"me":           {me},
 	}.Encode()))
 	if err != nil {
 		return
@@ -79,7 +95,7 @@ func (sess AuthorizationSession) Verify(code string) (token Token, err error) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}

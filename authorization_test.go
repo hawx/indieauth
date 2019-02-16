@@ -20,26 +20,17 @@ func TestAuthorizationRedirect(t *testing.T) {
 	authEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer authEndpoint.Close()
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/somepath", nil)
-
-	session := AuthorizationSession{
-		Me:          urlParse("https://me.example.com"),
+	session := &AuthorizationConfig{
 		ClientID:    urlParse("https://webapp.example.com/"),
 		RedirectURI: urlParse("https://webapp.example.com/callback"),
-		State:       "1234",
 		Scopes:      []string{"create", "update", "delete"},
-		Endpoints: Endpoints{
-			Authorization: urlParse(authEndpoint.URL),
-		},
 	}
 
-	err := session.Redirect(w, r)
+	endpoints := Endpoints{
+		Authorization: urlParse(authEndpoint.URL),
+	}
 
-	assert.Nil(err)
-
-	resp := w.Result()
-	assert.Equal(http.StatusFound, resp.StatusCode)
+	redirectURL := session.RedirectURL(endpoints, "https://me.example.com", "1234")
 
 	expectedRedirect := authEndpoint.URL +
 		"?client_id=https%3A%2F%2Fwebapp.example.com%2F" +
@@ -49,7 +40,7 @@ func TestAuthorizationRedirect(t *testing.T) {
 		"&scope=create+update+delete" +
 		"&state=1234"
 
-	assert.Equal(expectedRedirect, resp.Header.Get("Location"))
+	assert.Equal(expectedRedirect, redirectURL)
 }
 
 func TestAuthorizationVerify(t *testing.T) {
@@ -76,17 +67,16 @@ func TestAuthorizationVerify(t *testing.T) {
 	}))
 	defer authEndpoint.Close()
 
-	session := AuthorizationSession{
-		Me:          urlParse("http://me.localhost"),
+	session := &AuthorizationConfig{
 		ClientID:    urlParse("http://localhost"),
 		RedirectURI: urlParse("http://localhost/callback"),
-		State:       "1234",
-		Endpoints: Endpoints{
-			Authorization: urlParse(authEndpoint.URL),
-		},
 	}
 
-	token, err := session.Verify("abcde")
+	endpoints := Endpoints{
+		Authorization: urlParse(authEndpoint.URL),
+	}
+
+	token, err := session.Exchange(endpoints, "abcde", "http://me.localhost")
 
 	assert.Nil(err)
 	assert.Equal("tokentoken", token.AccessToken)

@@ -11,46 +11,59 @@ import (
 	"strings"
 )
 
-type AuthenticationSession struct {
-	Me          *url.URL
+type AuthenticationConfig struct {
 	ClientID    *url.URL
 	RedirectURI *url.URL
-	State       string
-	Endpoints   Endpoints
+	Client      *http.Client
 }
 
-func (sess AuthenticationSession) Redirect(w http.ResponseWriter, r *http.Request) error {
-	if r.Method != "GET" {
-		return errors.New("can only redirect from GET requests")
+func Authentication(clientID, redirectURI string) (*AuthenticationConfig, error) {
+	clientURL, err := url.Parse(clientID)
+	if err != nil {
+		return nil, err
+	}
+	redirectURL, err := url.Parse(redirectURI)
+	if err != nil {
+		return nil, err
 	}
 
-	if !verifySession(sess.Me, sess.ClientID, sess.RedirectURI) {
-		http.Error(w, "client_id and redirect_uri are suspicious", http.StatusBadRequest)
-		return errors.New("ClientID and RedirectURI are suspicios")
-	}
+	return &AuthenticationConfig{
+		ClientID:    clientURL,
+		RedirectURI: redirectURL,
+		Client:      http.DefaultClient,
+	}, nil
+}
 
+// RedirectURL returns a URL to the authorization provider for the profile URL,
+// or "me", given.
+func (c *AuthenticationConfig) RedirectURL(endpoints Endpoints, me, state string) string {
 	queryURL := &url.URL{
 		RawQuery: url.Values{
-			"me":            {sess.Me.String()},
-			"client_id":     {sess.ClientID.String()},
-			"redirect_uri":  {sess.RedirectURI.String()},
-			"state":         {sess.State},
+			"me":            {me},
+			"client_id":     {c.ClientID.String()},
+			"redirect_uri":  {c.RedirectURI.String()},
+			"state":         {state},
 			"response_type": {"id"},
 		}.Encode(),
 	}
 
-	redirectURI := sess.Endpoints.Authorization.ResolveReference(queryURL)
-
-	http.Redirect(w, r, redirectURI.String(), http.StatusFound)
-
-	return nil
+	redirectURI := endpoints.Authorization.ResolveReference(queryURL)
+	return redirectURI.String()
 }
 
-func (sess AuthenticationSession) Verify(code string) (me string, err error) {
-	req, err := http.NewRequest("POST", sess.Endpoints.Authorization.String(), strings.NewReader(url.Values{
+// Exchange converts an authentication code into the profile URL, or "me". The
+// code will usually be in r.FormValue("code"), but before calling this method
+// be sure to check the value of r.FormValue("state") is as expected.
+func (c *AuthenticationConfig) Exchange(endpoints Endpoints, code string) (me string, err error) {
+	client := http.DefaultClient
+	if c.Client != nil {
+		client = c.Client
+	}
+
+	req, err := http.NewRequest("POST", endpoints.Authorization.String(), strings.NewReader(url.Values{
 		"code":         {code},
-		"client_id":    {sess.ClientID.String()},
-		"redirect_uri": {sess.RedirectURI.String()},
+		"client_id":    {c.ClientID.String()},
+		"redirect_uri": {c.RedirectURI.String()},
 	}.Encode()))
 	if err != nil {
 		return
@@ -58,7 +71,7 @@ func (sess AuthenticationSession) Verify(code string) (me string, err error) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}
