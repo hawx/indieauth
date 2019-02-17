@@ -13,21 +13,16 @@ First of all you will need to get the URL to verify, in the example we are using
 a parameter "me" for this. From this we can query for the defined authentication
 endpoint.
 
-    var session indieauth.Session
+    config = indieauth.Authentication(
+      urlParse("http://client.example.com/"),
+      urlParse("http://client.example.com/callback"),
+    )
 
     func Handler(w http.ResponseWriter, r *http.Request) {
       meURL, _ := url.Parse(r.FormValue("me"))
       endpoints, _ := indieauth.FindEndpoints(meURL)
 
-      session = indieauth.AuthenticationSession{
-        Me:          meURL,
-        ClientID:    urlParse("http://client.example.com/"),
-        RedirectURI: urlParse("http://client.example.com/callback"),
-        State:       "1234",
-        Endpoints:   endpoints,
-      }
-
-      session.Redirect(w, r)
+      session.Redirect(endpoints, r.FormValue("me"), "some-random-state")
     }
 
 This will redirect the user to their defined authentication endpoint, which will

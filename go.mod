@@ -1,4 +1,4 @@
-module hawx.me/code/indie-auth
+module hawx.me/code/indieauth
 
 require (
 	github.com/peterhellberg/link v1.0.0
