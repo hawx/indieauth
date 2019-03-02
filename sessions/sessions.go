@@ -19,11 +19,14 @@ import (
 // Sessions provides some handlers for authenticating a single user with
 // indieauth.
 type Sessions struct {
-	me               string
-	store            sessions.Store
-	auth             *indieauth.AuthenticationConfig
-	ends             indieauth.Endpoints
+	me    string
+	store sessions.Store
+	auth  *indieauth.AuthenticationConfig
+	ends  indieauth.Endpoints
+	// Handler to use when Shield fails
 	DefaultSignedOut http.Handler
+	// Path to redirect to on sign-in/out
+	Root string
 }
 
 // New creates a new Sessions.
@@ -43,6 +46,7 @@ func New(me, secret string, auth *indieauth.AuthenticationConfig) (*Sessions, er
 		auth:             auth,
 		ends:             endpoints,
 		DefaultSignedOut: http.NotFoundHandler(),
+		Root:             "/",
 	}, nil
 }
 
@@ -141,7 +145,7 @@ func (s *Sessions) Callback() http.HandlerFunc {
 		}
 
 		s.set(w, r, me)
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, s.Root, http.StatusFound)
 	}
 }
 
@@ -149,6 +153,6 @@ func (s *Sessions) Callback() http.HandlerFunc {
 func (s *Sessions) SignOut() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.set(w, r, "")
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, s.Root, http.StatusFound)
 	}
 }
