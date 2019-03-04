@@ -15,6 +15,11 @@ type Endpoints struct {
 }
 
 func FindEndpoints(me string) (ends Endpoints, err error) {
+	meURL, err := url.Parse(me)
+	if err != nil {
+		return
+	}
+
 	resp, err := http.DefaultClient.Get(me)
 	if err != nil {
 		return
@@ -50,13 +55,13 @@ loop:
 		}
 	}
 
-	authURL, err := url.Parse(auth)
+	authURL, err := meURL.Parse(auth)
 	if err != nil {
 		return
 	}
 	ends.Authorization = authURL
 
-	tokenURL, err := url.Parse(token)
+	tokenURL, err := meURL.Parse(token)
 	if err != nil {
 		return
 	}
