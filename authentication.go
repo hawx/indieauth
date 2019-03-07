@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+// AuthenticationConfig provides the data for a client that wants to
+// authenticate users.
 type AuthenticationConfig struct {
 	ClientID    *url.URL
 	RedirectURI *url.URL

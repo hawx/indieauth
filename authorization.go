@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+// Token can be used to make requests on behalf of the user who provided
+// authorization to the client.
 type Token struct {
 	AccessToken string
 	TokenType   string
@@ -18,6 +20,7 @@ type Token struct {
 	Me          string
 }
 
+// HasScope returns true if the token was issued with the scope.
 func (t Token) HasScope(scope string) bool {
 	for _, candidate := range t.Scopes {
 		if candidate == scope {
