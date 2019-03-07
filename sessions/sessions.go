@@ -35,6 +35,11 @@ func New(me, secret string, auth *indieauth.AuthenticationConfig) (*Sessions, er
 		return nil, errors.New("me must be non-empty")
 	}
 
+	byteSecret, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		return nil, err
+	}
+
 	endpoints, err := indieauth.FindEndpoints(me)
 	if err != nil {
 		return nil, err
@@ -42,7 +47,7 @@ func New(me, secret string, auth *indieauth.AuthenticationConfig) (*Sessions, er
 
 	return &Sessions{
 		me:               me,
-		store:            sessions.NewCookieStore([]byte(secret)),
+		store:            sessions.NewCookieStore(byteSecret),
 		auth:             auth,
 		ends:             endpoints,
 		DefaultSignedOut: http.NotFoundHandler(),
