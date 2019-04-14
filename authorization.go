@@ -107,7 +107,7 @@ func (c *AuthorizationConfig) Exchange(endpoints Endpoints, code, me string) (to
 	mediatype, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if resp.StatusCode != http.StatusOK || mediatype != "application/json" {
 		data, _ := ioutil.ReadAll(resp.Body)
-		log.Println(resp.StatusCode, string(data))
+		log.Println(resp.StatusCode, mediatype, string(data))
 		return token, errors.New("recieved a bad request")
 	}
 
