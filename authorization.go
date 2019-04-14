@@ -85,7 +85,7 @@ func (c *AuthorizationConfig) Exchange(endpoints Endpoints, code, me string) (to
 		client = c.Client
 	}
 
-	req, err := http.NewRequest("POST", endpoints.Authorization.String(), strings.NewReader(url.Values{
+	req, err := http.NewRequest("POST", endpoints.Token.String(), strings.NewReader(url.Values{
 		"grant_type":   {"authorization_code"},
 		"code":         {code},
 		"client_id":    {c.ClientID.String()},
@@ -107,7 +107,7 @@ func (c *AuthorizationConfig) Exchange(endpoints Endpoints, code, me string) (to
 	mediatype, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if resp.StatusCode != http.StatusOK || mediatype != "application/json" {
 		data, _ := ioutil.ReadAll(resp.Body)
-		log.Println(string(data))
+		log.Println(resp.StatusCode, string(data))
 		return token, errors.New("recieved a bad request")
 	}
 

@@ -46,7 +46,7 @@ func TestAuthorizationRedirect(t *testing.T) {
 func TestAuthorizationVerify(t *testing.T) {
 	assert := assert.New(t)
 
-	authEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tokenEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" ||
 			r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" ||
 			r.FormValue("grant_type") != "authorization_code" ||
@@ -65,7 +65,7 @@ func TestAuthorizationVerify(t *testing.T) {
   "me": "https://user.example.net/"
 }`))
 	}))
-	defer authEndpoint.Close()
+	defer tokenEndpoint.Close()
 
 	session := &AuthorizationConfig{
 		ClientID:    urlParse("http://localhost"),
@@ -73,7 +73,7 @@ func TestAuthorizationVerify(t *testing.T) {
 	}
 
 	endpoints := Endpoints{
-		Authorization: urlParse(authEndpoint.URL),
+		Token: urlParse(tokenEndpoint.URL),
 	}
 
 	token, err := session.Exchange(endpoints, "abcde", "http://me.localhost")
