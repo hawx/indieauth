@@ -121,6 +121,15 @@ func (c *AuthorizationConfig) Exchange(endpoints Endpoints, code, me string) (to
 		return token, err
 	}
 
+	newEndpoints, err := FindEndpoints(data.Me)
+	if err != nil {
+		return Token{}, err
+	}
+
+	if newEndpoints.Authorization.String() != endpoints.Authorization.String() {
+		return Token{}, errCannotClaim
+	}
+
 	token.AccessToken = data.AccessToken
 	token.TokenType = data.TokenType
 	token.Scopes = strings.Fields(data.Scope)

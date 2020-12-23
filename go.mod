@@ -1,5 +1,7 @@
 module hawx.me/code/indieauth
 
+go 1.14
+
 require (
 	github.com/gorilla/sessions v1.1.3
 	github.com/peterhellberg/link v1.0.0

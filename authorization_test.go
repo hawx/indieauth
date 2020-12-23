@@ -46,6 +46,8 @@ func TestAuthorizationRedirect(t *testing.T) {
 func TestAuthorizationVerify(t *testing.T) {
 	assert := assert.New(t)
 
+	var meEndpoint *httptest.Server
+
 	tokenEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" ||
 			r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" ||
@@ -62,10 +64,15 @@ func TestAuthorizationVerify(t *testing.T) {
   "access_token": "tokentoken",
   "token_type": "Bearer",
   "scope": "create update delete",
-  "me": "https://user.example.net/"
+  "me": "` + meEndpoint.URL + `"
 }`))
 	}))
 	defer tokenEndpoint.Close()
+
+	meEndpoint = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<link rel="authorization_endpoint" href="http://example.com/auth"/>`))
+	}))
+	defer meEndpoint.Close()
 
 	session := &AuthorizationConfig{
 		ClientID:    urlParse("http://localhost"),
@@ -73,7 +80,8 @@ func TestAuthorizationVerify(t *testing.T) {
 	}
 
 	endpoints := Endpoints{
-		Token: urlParse(tokenEndpoint.URL),
+		Authorization: urlParse("http://example.com/auth"),
+		Token:         urlParse(tokenEndpoint.URL),
 	}
 
 	token, err := session.Exchange(endpoints, "abcde", "http://me.localhost")
@@ -85,5 +93,52 @@ func TestAuthorizationVerify(t *testing.T) {
 	assert.True(token.HasScope("create"))
 	assert.True(token.HasScope("update"))
 	assert.True(token.HasScope("delete"))
-	assert.Equal("https://user.example.net/", token.Me)
+	assert.Equal(meEndpoint.URL, token.Me)
+}
+
+func TestAuthorizationVerifyCannotBeClaimed(t *testing.T) {
+	assert := assert.New(t)
+
+	var meEndpoint *httptest.Server
+
+	tokenEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" ||
+			r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" ||
+			r.FormValue("grant_type") != "authorization_code" ||
+			r.FormValue("code") != "abcde" ||
+			r.FormValue("client_id") != "http://localhost" ||
+			r.FormValue("redirect_uri") != "http://localhost/callback" ||
+			r.FormValue("me") != "http://me.localhost" {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+  "access_token": "tokentoken",
+  "token_type": "Bearer",
+  "scope": "create update delete",
+  "me": "` + meEndpoint.URL + `"
+}`))
+	}))
+	defer tokenEndpoint.Close()
+
+	meEndpoint = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<link rel="authorization_endpoint" href="https://legit.example.com"/>`))
+	}))
+	defer meEndpoint.Close()
+
+	session := &AuthorizationConfig{
+		ClientID:    urlParse("http://localhost"),
+		RedirectURI: urlParse("http://localhost/callback"),
+	}
+
+	endpoints := Endpoints{
+		Authorization: urlParse("http://example.com/auth"),
+		Token:         urlParse(tokenEndpoint.URL),
+	}
+
+	token, err := session.Exchange(endpoints, "abcde", "http://me.localhost")
+
+	assert.Equal(errCannotClaim, err)
+	assert.Equal(Token{}, token)
 }

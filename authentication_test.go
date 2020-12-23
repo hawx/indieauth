@@ -40,6 +40,8 @@ func TestAuthenticationRedirect(t *testing.T) {
 func TestAuthenticationVerify(t *testing.T) {
 	assert := assert.New(t)
 
+	var meEndpoint *httptest.Server
+
 	authEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" ||
 			r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" ||
@@ -50,9 +52,14 @@ func TestAuthenticationVerify(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"me": "http://john.doe"}`))
+		w.Write([]byte(`{"me": "` + meEndpoint.URL + `"}`))
 	}))
 	defer authEndpoint.Close()
+
+	meEndpoint = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<link rel="authorization_endpoint" href="` + authEndpoint.URL + `"/>`))
+	}))
+	defer meEndpoint.Close()
 
 	session := &AuthenticationConfig{
 		ClientID:    urlParse("http://localhost"),
@@ -66,5 +73,44 @@ func TestAuthenticationVerify(t *testing.T) {
 	me, err := session.Exchange(endpoints, "abcde")
 
 	assert.Nil(err)
-	assert.Equal("http://john.doe", me)
+	assert.Equal(meEndpoint.URL, me)
+}
+
+func TestAuthenticationVerifyMeCannotBeClaimed(t *testing.T) {
+	assert := assert.New(t)
+
+	var meEndpoint *httptest.Server
+
+	authEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" ||
+			r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" ||
+			r.FormValue("code") != "abcde" ||
+			r.FormValue("client_id") != "http://localhost" ||
+			r.FormValue("redirect_uri") != "http://localhost/callback" {
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"me": "` + meEndpoint.URL + `"}`))
+	}))
+	defer authEndpoint.Close()
+
+	meEndpoint = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<link rel="authorization_endpoint" href="https://legit.example.com"/>`))
+	}))
+	defer meEndpoint.Close()
+
+	session := &AuthenticationConfig{
+		ClientID:    urlParse("http://localhost"),
+		RedirectURI: urlParse("http://localhost/callback"),
+	}
+
+	endpoints := Endpoints{
+		Authorization: urlParse(authEndpoint.URL),
+	}
+
+	me, err := session.Exchange(endpoints, "abcde")
+
+	assert.Equal(errCannotClaim, err)
+	assert.Equal("", me)
 }

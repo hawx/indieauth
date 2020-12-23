@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var errCannotClaim = errors.New("me returned with non-matching authorization endpoint")
+
 // AuthenticationConfig provides the data for a client that wants to
 // authenticate users.
 type AuthenticationConfig struct {
@@ -91,6 +93,15 @@ func (c *AuthenticationConfig) Exchange(endpoints Endpoints, code string) (me st
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return "", err
+	}
+
+	newEndpoints, err := FindEndpoints(data.Me)
+	if err != nil {
+		return "", err
+	}
+
+	if newEndpoints.Authorization.String() != endpoints.Authorization.String() {
+		return "", errCannotClaim
 	}
 
 	return data.Me, nil
