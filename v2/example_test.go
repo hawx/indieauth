@@ -1,64 +1,57 @@
 package indieauth_test
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 
 	"hawx.me/code/indieauth/v2"
 )
 
-func ExampleAuthorization() {
-	randomString := func() string {
-		return "abcde"
-	}
-
-	setCookie := func(w http.ResponseWriter, r *http.Request, token indieauth.Token) {
-		// more code...
-	}
-
-	sessions := map[string]indieauth.Endpoints{}
-	mes := map[string]string{}
-
-	// get the configuration for authorization, the only difference to
-	// authentication is that we are asking the user to allow us to perform
-	// certain actions: here 'create' and 'update'
-	config, _ := indieauth.Authorization(
-		"http://client.example.com/",
-		"http://client.example.com/callback",
-		[]string{"create", "update"})
-
-	http.HandleFunc("/sign-in", func(w http.ResponseWriter, r *http.Request) {
-		state := randomString()
-
-		endpoints, _ := indieauth.FindEndpoints(r.FormValue("me"))
-		sessions[state] = endpoints
-		// we need to store the user's profile URL as it is needed for the exchange
-		// in this flow
-		mes[state] = r.FormValue("me")
-
-		redirectURL := config.RedirectURL(endpoints, r.FormValue("me"), "some-random-state")
-
-		http.Redirect(w, r, redirectURL, http.StatusFound)
+func ExampleNewSessions() {
+	sessions, _ := indieauth.NewSessions("7xZ+h4OnB0EkgSDspZila2fvn5c0ggE+xmBz9VpyfGU=", &indieauth.Config{
+		ClientID:    "http://localhost:8080/",
+		RedirectURL: "http://localhost:8080/callback",
 	})
 
-	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		state := r.FormValue("state")
+	mux := http.NewServeMux()
 
-		endpoints, ok := sessions[state]
-		if !ok {
-			http.Redirect(w, r, "/", http.StatusFound)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		if response, ok := sessions.SignedIn(r); ok {
+			fmt.Fprintf(w, `Signed in as: %s<br/><a href="/sign-out">Sign-out</a>`, response.Me)
+		} else {
+			fmt.Fprint(w, `<form action="/sign-in"><input name="me"><button type="submit">Sign-in</button>`)
+		}
+	})
+
+	mux.HandleFunc("/sign-in", func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.RedirectToSignIn(w, r, r.FormValue("me")); err != nil {
+			log.Println(err)
+			http.Error(w, "", http.StatusInternalServerError)
+		}
+	})
+
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.HandleCallback(w, r); err != nil {
+			log.Println(err)
+			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		me := mes[state]
 
-		// authorization results in a token which we can then use to perform actions
-		// on behalf of the authenticated user
-		token, err := config.Exchange(endpoints, r.FormValue("code"), me)
-		if err != nil {
-			http.Redirect(w, r, "/?error", http.StatusFound)
-			return
-		}
-
-		setCookie(w, r, token)
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
+
+	mux.HandleFunc("/sign-out", func(w http.ResponseWriter, r *http.Request) {
+		if err := sessions.SignOut(w, r); err != nil {
+			log.Println(err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
+
+	log.Println("Listening at :8080")
+	http.ListenAndServe(":8080", mux)
 }
