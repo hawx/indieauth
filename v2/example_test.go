@@ -33,7 +33,7 @@ func ExampleNewSessions() {
 	})
 
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		if err := sessions.HandleCallback(w, r); err != nil {
+		if err := sessions.Verify(w, r); err != nil {
 			log.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return

@@ -47,3 +47,19 @@ func TestFindEndpointsRelative(t *testing.T) {
 	assert.Equal(t, homepage.URL+"/hey", endpoints.Authorization.String())
 	assert.Equal(t, homepage.URL+"/what", endpoints.Token.String())
 }
+
+func TestFindMissing(t *testing.T) {
+	homepage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`
+<html>
+<head>
+</head>
+</html>
+`))
+	}))
+	defer homepage.Close()
+
+	_, err := FindEndpoints(homepage.URL)
+
+	assert.Equal(t, ErrAuthorizationEndpointMissing, err)
+}

@@ -20,6 +20,8 @@ func (e clientError) Error() string {
 	switch e {
 	case ErrCannotClaim:
 		return "me returned with non-matching authorization endpoint"
+	case ErrAuthorizationEndpointMissing:
+		return "no authorization endpoint found"
 	default:
 		panic("missing error definition")
 	}
@@ -27,4 +29,5 @@ func (e clientError) Error() string {
 
 const (
 	ErrCannotClaim clientError = iota
+	ErrAuthorizationEndpointMissing
 )

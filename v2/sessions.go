@@ -78,10 +78,10 @@ func (s *Sessions) RedirectToSignIn(w http.ResponseWriter, r *http.Request, me s
 	return nil
 }
 
-// HandleCallback will complete the authentication process and should be called
+// Verify will complete the authentication process and should be called
 // in the route assigned to RedirectURL. After calling this, redirect to another
 // page of your application.
-func (s *Sessions) HandleCallback(w http.ResponseWriter, r *http.Request) error {
+func (s *Sessions) Verify(w http.ResponseWriter, r *http.Request) error {
 	data := s.getData(r)
 
 	if r.FormValue("state") != data.State {
