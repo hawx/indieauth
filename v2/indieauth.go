@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-// Config defines configuration for a client making requests to
-// authorize a user to perform a set of defined actions.
+// Config defines a client for authorizing users to perform a set of defined
+// actions.
 type Config struct {
 	ClientID    string
 	RedirectURL string
@@ -48,12 +48,12 @@ func (c *Config) AuthCodeURL(endpoints Endpoints, state, codeChallenge, me strin
 }
 
 // Exchange converts an authorization code into a token or profile
-// information. The code will usually be in r.FormValue("code"), but before
-// calling this method be sure to check the value of r.FormValue("state") is as
-// expected.
+// information. The code will be in the query string of the request sent to the
+// RedirectURL, before calling this method ensure you check the state parameter
+// matches the value used for AuthCodeURL.
 //
-// If Scopes is empty or only contains "profile" the response will not contain
-// an access token.
+// If Scopes is empty, "profile", or "profile email", the response will not
+// contain an access token.
 func (c *Config) Exchange(endpoints Endpoints, codeVerifier, code string) (*Response, error) {
 	client := http.DefaultClient
 	if c.Client != nil {
@@ -107,7 +107,7 @@ func (c *Config) Exchange(endpoints Endpoints, codeVerifier, code string) (*Resp
 		return nil, err
 	}
 
-	newEndpoints, err := FindEndpoints(data.Me)
+	newEndpoints, err := c.FindEndpoints(data.Me)
 	if err != nil {
 		return nil, err
 	}
@@ -126,5 +126,15 @@ func (c *Config) Exchange(endpoints Endpoints, codeVerifier, code string) (*Resp
 }
 
 func (c *Config) isProfile() bool {
-	return len(c.Scopes) == 0 || (len(c.Scopes) == 1 && c.Scopes[0] == "profile")
+	switch len(c.Scopes) {
+	case 0:
+		return true
+	case 1:
+		return c.Scopes[0] == "profile"
+	case 2:
+		return c.Scopes[0] == "profile" && c.Scopes[1] == "email" ||
+			c.Scopes[0] == "email" && c.Scopes[1] == "profile"
+	default:
+		return false
+	}
 }

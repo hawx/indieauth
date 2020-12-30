@@ -64,6 +64,7 @@ type testMeEndpoint struct {
 }
 
 func (e *testMeEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, `<link rel="authorization_endpoint" href="%s"/>`, e.auth)
 }
 
@@ -128,7 +129,7 @@ func TestExchange(t *testing.T) {
 	}
 
 	token, err := session.Exchange(endpoints, "abcde", "verifier")
-	assert(err).Nil()
+	assert(err).Must.Nil()
 
 	assert(token.AccessToken).Equal("tokentoken")
 	assert(token.TokenType).Equal("Bearer")
@@ -163,7 +164,7 @@ func TestExchangeOnlyMe(t *testing.T) {
 	}
 
 	token, err := session.Exchange(endpoints, "abcde", "verifier")
-	assert(err).Nil()
+	assert(err).Must.Nil()
 
 	assert(token.AccessToken).Equal("")
 	assert(token.TokenType).Equal("")

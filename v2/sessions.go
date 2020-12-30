@@ -45,7 +45,7 @@ func NewSessions(secret string, config *Config) (*Sessions, error) {
 // RedirectToSignIn will issue a redirect to the authorization endpoint
 // discovered for "me".
 func (s *Sessions) RedirectToSignIn(w http.ResponseWriter, r *http.Request, me string) error {
-	endpoints, err := FindEndpoints(me)
+	endpoints, err := s.config.FindEndpoints(me)
 	if err != nil {
 		return fmt.Errorf("could not find authorization endpoints: %w", err)
 	}

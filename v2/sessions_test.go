@@ -14,6 +14,7 @@ func TestSessionsRedirectToSignIn(t *testing.T) {
 	assert := assert.Wrap(t)
 
 	me := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprint(w, `<link rel="authorization_endpoint" href="https://auth/" />`)
 	}))
 	defer me.Close()
@@ -57,6 +58,7 @@ func TestSessionsVerify(t *testing.T) {
 	defer auth.Close()
 
 	me = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
 		fmt.Fprintf(w, `<link rel="authorization_endpoint" href="%s" />`, auth.URL)
 	}))
 	defer me.Close()
