@@ -22,6 +22,13 @@ func testEndpointServer(body string, headers http.Header) *httptest.Server {
 	}))
 }
 
+func testMetadataEndpoint(body string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}))
+}
+
 func TestFindEndpoints(t *testing.T) {
 	homepage := testEndpointServer(`
 <html>
@@ -168,4 +175,88 @@ func TestFindMissing(t *testing.T) {
 	_, err := (&Config{}).FindEndpoints(homepage.URL)
 
 	assert.Equal(t, ErrAuthorizationEndpointMissing, err)
+}
+
+func TestFindEndpointsViaMetadata(t *testing.T) {
+	metadata := testMetadataEndpoint(`
+{
+	"authorization_endpoint":  "http://example.com/not-hey",
+	"token_endpoint": "http://example.com/not-what"
+}
+`)
+
+	defer metadata.Close()
+
+	homepage := testEndpointServer(`
+<html>
+<head>
+<link rel="indieauth-metadata" href="`+metadata.URL+`" />
+<link rel="authorization_endpoint" href="http://example.com/hey" />
+<link rel="token_endpoint" href="http://example.com/what" />
+</head>
+</html>
+`, nil)
+	defer homepage.Close()
+
+	endpoints, err := (&Config{}).FindEndpoints(homepage.URL)
+
+	if assert.Nil(t, err) {
+		assert.Equal(t, "http://example.com/not-hey", endpoints.Authorization.String())
+		assert.Equal(t, "http://example.com/not-what", endpoints.Token.String())
+	}
+}
+
+func TestFindEndpointsViaMetadataLink(t *testing.T) {
+	metadata := testMetadataEndpoint(`
+{
+	"authorization_endpoint":  "http://example.com/not-hey",
+	"token_endpoint": "http://example.com/not-what"
+}
+`)
+	defer metadata.Close()
+
+	homepage := testEndpointServer("", http.Header{
+		"Link": {
+			`<` + metadata.URL + `>; rel="indieauth-metadata"`,
+		},
+	})
+	defer homepage.Close()
+
+	endpoints, err := (&Config{}).FindEndpoints(homepage.URL)
+
+	if assert.Nil(t, err) {
+		assert.Equal(t, "http://example.com/not-hey", endpoints.Authorization.String())
+		assert.Equal(t, "http://example.com/not-what", endpoints.Token.String())
+	}
+}
+
+func TestFindEndpointsViaMetadataPreferLink(t *testing.T) {
+	metadata := testMetadataEndpoint(`
+{
+	"authorization_endpoint":  "http://example.com/hey",
+	"token_endpoint": "http://example.com/what"
+}
+`)
+	defer metadata.Close()
+
+	homepage := testEndpointServer(`
+<html>
+<head>
+<link rel="indieauth-metadata" href="http://example.com/not-valid" />
+</head>
+</html>
+`, http.Header{
+		"Link": {
+			`<` + metadata.URL + `>; rel="indieauth-metadata"`,
+		},
+	})
+	defer homepage.Close()
+
+	endpoints, err := (&Config{}).FindEndpoints(homepage.URL)
+
+	if assert.Nil(t, err) {
+		assert.Equal(t, "http://example.com/hey", endpoints.Authorization.String())
+		assert.Equal(t, "http://example.com/what", endpoints.Token.String())
+	}
+
 }
