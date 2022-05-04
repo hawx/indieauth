@@ -2,7 +2,6 @@ package indieauth
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
@@ -32,7 +31,7 @@ func (c *Config) FindEndpoints(me string) (Endpoints, error) {
 		return endpoints, err
 	}
 
-	resp, err := client.Get(me)
+	resp, err := client.Get(meURL.String())
 	if err != nil {
 		return endpoints, err
 	}
@@ -56,18 +55,69 @@ func (c *Config) FindEndpoints(me string) (Endpoints, error) {
 
 	metadataEndpoints := links.FilterByRel("indieauth-metadata")
 	if len(metadataEndpoints) != 0 {
-		metadataEndpoint := metadataEndpoints[0]
-		linkURL, err := meURL.Parse(metadataEndpoint.URL)
+		linkURL, err := meURL.Parse(metadataEndpoints[0].URL)
 		if err != nil {
 			return endpoints, err
 		}
-		err = c.findByDiscoveryEndpoint(client, linkURL, &endpoints)
+
+		endpoints, err = c.findByDiscoveryEndpoint(client, linkURL)
+	} else {
+		endpoints, err = c.findDirectly(meURL, links)
+	}
+
+	if err != nil {
 		return endpoints, err
 	}
 
+	if endpoints.Authorization == nil {
+		return endpoints, ErrAuthorizationEndpointMissing
+	}
+
+	return endpoints, nil
+}
+
+type metadata struct {
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+}
+
+func (c *Config) findByDiscoveryEndpoint(client *http.Client, url *url.URL) (Endpoints, error) {
+	var endpoints Endpoints
+
+	resp, err := client.Get(url.String())
+	if err != nil {
+		return endpoints, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return endpoints, &RequestError{
+			StatusCode: resp.StatusCode,
+		}
+	}
+
+	var v metadata
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		return endpoints, err
+	}
+
+	linkURL, err := url.Parse(v.AuthorizationEndpoint)
+	if err == nil {
+		endpoints.Authorization = linkURL
+	}
+
+	linkURL, err = url.Parse(v.TokenEndpoint)
+	if err == nil {
+		endpoints.Token = linkURL
+	}
+
+	return endpoints, nil
+}
+
+func (c *Config) findDirectly(url *url.URL, links []linkheader.Link) (endpoints Endpoints, err error) {
 	for _, link := range links {
 		if link.Rel == "authorization_endpoint" && endpoints.Authorization == nil {
-			linkURL, err := meURL.Parse(link.URL)
+			linkURL, err := url.Parse(link.URL)
 			if err != nil {
 				return endpoints, err
 			}
@@ -75,7 +125,7 @@ func (c *Config) FindEndpoints(me string) (Endpoints, error) {
 		}
 
 		if link.Rel == "token_endpoint" && endpoints.Token == nil {
-			linkURL, err := meURL.Parse(link.URL)
+			linkURL, err := url.Parse(link.URL)
 			if err != nil {
 				return endpoints, err
 			}
@@ -87,42 +137,5 @@ func (c *Config) FindEndpoints(me string) (Endpoints, error) {
 		}
 	}
 
-	if endpoints.Authorization == nil {
-		return endpoints, ErrAuthorizationEndpointMissing
-	}
-
-	return endpoints, nil
-}
-
-func (c *Config) findByDiscoveryEndpoint(client *http.Client, url *url.URL, endpoints *Endpoints) error {
-	resp, err := client.Get(url.String())
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 {
-		return &RequestError{
-			StatusCode: resp.StatusCode,
-		}
-	}
-
-	var body map[string]string
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-	json.Unmarshal(bodyBytes, &body)
-	linkURL, err := url.Parse(body["authorization_endpoint"])
-	if err == nil {
-		endpoints.Authorization = linkURL
-	}
-	linkURL, err = url.Parse(body["token_endpoint"])
-	if err == nil {
-		endpoints.Token = linkURL
-	}
-
-	return nil
+	return endpoints, err
 }

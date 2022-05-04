@@ -206,6 +206,35 @@ func TestFindEndpointsViaMetadata(t *testing.T) {
 	}
 }
 
+func TestFindEndpointsViaMetadataRelative(t *testing.T) {
+	metadata := testMetadataEndpoint(`
+{
+	"authorization_endpoint":  "/not-hey",
+	"token_endpoint": "/not-what"
+}
+`)
+
+	defer metadata.Close()
+
+	homepage := testEndpointServer(`
+<html>
+<head>
+<link rel="indieauth-metadata" href="`+metadata.URL+`" />
+<link rel="authorization_endpoint" href="http://example.com/hey" />
+<link rel="token_endpoint" href="http://example.com/what" />
+</head>
+</html>
+`, nil)
+	defer homepage.Close()
+
+	endpoints, err := (&Config{}).FindEndpoints(homepage.URL)
+
+	if assert.Nil(t, err) {
+		assert.Equal(t, metadata.URL+"/not-hey", endpoints.Authorization.String())
+		assert.Equal(t, metadata.URL+"/not-what", endpoints.Token.String())
+	}
+}
+
 func TestFindEndpointsViaMetadataLink(t *testing.T) {
 	metadata := testMetadataEndpoint(`
 {
@@ -258,5 +287,4 @@ func TestFindEndpointsViaMetadataPreferLink(t *testing.T) {
 		assert.Equal(t, "http://example.com/hey", endpoints.Authorization.String())
 		assert.Equal(t, "http://example.com/what", endpoints.Token.String())
 	}
-
 }
